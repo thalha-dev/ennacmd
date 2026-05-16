@@ -4,6 +4,16 @@
 
 It opens a focused TUI, converts plain-English intent into executable shell commands, and lets you review, refine, copy, or accept the result. It does not run commands for you.
 
+## Screenshots
+
+Input mode
+
+![ennacmd input mode](assets/screenshots/input.png)
+
+Command mode
+
+![ennacmd command mode](assets/screenshots/command.png)
+
 ## Highlights
 
 - Terminal UI built with Bubble Tea and Lip Gloss
