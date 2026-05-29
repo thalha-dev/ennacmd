@@ -6,8 +6,10 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 
+	"github.com/thalha-dev/ennacmd/internal/shell"
 	"golang.org/x/sys/unix"
 )
 
@@ -19,7 +21,7 @@ func QueueInput(in *os.File, command string) error {
 
 	if err := injectQueuedCommand(in, linuxTTYPath(in), text); err != nil {
 		if errors.Is(err, unix.EPERM) || errors.Is(err, unix.EACCES) || errors.Is(err, unix.EIO) || errors.Is(err, unix.ENOTTY) {
-			return fmt.Errorf("inject queued command into tty: %w (run 'ennacmd shell-install' once to enable supported shell integration)", err)
+			return fmt.Errorf("inject queued command into tty: %w (%s)", err, linuxShellInstallHint())
 		}
 		return fmt.Errorf("inject queued command into tty: %w", err)
 	}
@@ -113,6 +115,37 @@ func linuxFDPath(fd int) string {
 		return ""
 	}
 	return path
+}
+
+func linuxShellInstallHint() string {
+	kind := shell.Detect("")
+	command := "ennacmd shell-install"
+
+	if executable, err := os.Executable(); err == nil && executable != "" {
+		if relative, relErr := filepath.Rel(mustGetwd(), executable); relErr == nil && relative != "" && !strings.HasPrefix(relative, "..") {
+			if !strings.HasPrefix(relative, ".") {
+				relative = "." + string(filepath.Separator) + relative
+			}
+			command = relative + " shell-install"
+		} else {
+			command = executable + " shell-install"
+		}
+	}
+
+	if kind != shell.Auto {
+		command += " " + string(kind)
+		return fmt.Sprintf("run '%s' once, then restart %s", command, kind.DisplayName())
+	}
+
+	return fmt.Sprintf("run '%s' once, then restart your shell", command)
+}
+
+func mustGetwd() string {
+	workingDir, err := os.Getwd()
+	if err != nil || workingDir == "" {
+		return "."
+	}
+	return workingDir
 }
 
 func sanitizeQueuedCommand(command string) string {
