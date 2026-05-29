@@ -21,7 +21,8 @@ Command mode
 - Provider support for OpenAI-compatible APIs, OpenRouter, and Ollama
 - First-run setup flow with live provider validation
 - Command refinement, explanation, copy, and accept flows
-- Windows prompt prefilling when a command is accepted
+- Prompt insertion on supported terminals when a command is accepted
+- Optional capture mode for bash, zsh, and fish shell integrations
 
 ## Installation
 
@@ -69,10 +70,74 @@ To rerun setup later:
 ennacmd setup
 ```
 
+## Shell Integration
+
+Run `ennacmd` normally first. When you accept a command, `ennacmd` tries to insert it back into the active prompt on supported terminals.
+
+Some Linux terminals or kernels block child-process prompt injection. When that happens, use capture mode instead: `ennacmd --capture` runs the UI on the real terminal and prints the accepted command to stdout so your shell can place it back into the current prompt.
+
+### zsh
+
+Add this to `~/.zshrc` and reload your shell:
+
+```zsh
+function __ennacmd_capture() {
+  local command
+  command="$(ennacmd --capture)"
+  if [[ -n "$command" ]]; then
+    LBUFFER+="$command"
+  fi
+  zle redisplay
+}
+
+zle -N __ennacmd_capture
+bindkey '^G' __ennacmd_capture
+```
+
+Press `Ctrl+G` to open `ennacmd`, then press `Enter` in command mode to insert the accepted command back into your prompt.
+
+### bash
+
+Add this to `~/.bashrc` and reload your shell:
+
+```bash
+__ennacmd_capture() {
+  local command
+  command="$(ennacmd --capture)"
+  if [[ -n "$command" ]]; then
+    READLINE_LINE="$command"
+    READLINE_POINT=${#READLINE_LINE}
+  fi
+}
+
+bind -x '"\C-g":__ennacmd_capture'
+```
+
+Press `Ctrl+G` to open `ennacmd`, then press `Enter` in command mode to insert the accepted command back into your prompt.
+
+### fish
+
+Add this to `~/.config/fish/config.fish` and reload your shell:
+
+```fish
+function __ennacmd_capture
+    set -l command (ennacmd --capture)
+    if test -n "$command"
+        commandline --insert -- $command
+    end
+    commandline -f repaint
+end
+
+bind \cg __ennacmd_capture
+```
+
+Press `Ctrl+G` to open `ennacmd`, then press `Enter` in command mode to insert the accepted command back into your prompt.
+
 ## Commands
 
 ```text
 ennacmd
+ennacmd --capture
 ennacmd setup
 ennacmd version
 ```
@@ -122,7 +187,9 @@ Command generation is constrained intentionally:
 - syntax follows the detected shell
 - commands are adapted to the current operating system
 
-On Windows PowerShell, accepted commands can be prefixed back into the active prompt instead of being executed automatically.
+When you accept a command, `ennacmd` inserts it into the active prompt instead of executing it automatically when the terminal allows queued input.
+
+On Linux, some terminals or kernels block queued-input injection. When that happens, use the shell integration snippets above with `ennacmd --capture`.
 
 ## Development
 

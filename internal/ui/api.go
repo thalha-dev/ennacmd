@@ -35,10 +35,14 @@ type Options struct {
 	Config   config.Config
 	Shell    shell.Kind
 	Provider ai.Provider
+	Input    *os.File
+	Output   *os.File
 }
 
 type InitOptions struct {
 	Config config.Config
+	Input  *os.File
+	Output *os.File
 }
 
 func Run(ctx context.Context, options Options) (Result, error) {
@@ -47,8 +51,14 @@ func Run(ctx context.Context, options Options) (Result, error) {
 		currentDir = "."
 	}
 
-	input := os.Stdin
-	output := os.Stdout
+	input := options.Input
+	if input == nil {
+		input = os.Stdin
+	}
+	output := options.Output
+	if output == nil {
+		output = os.Stdout
+	}
 
 	uiModel := newModel(ctx, options, currentDir)
 	program := tea.NewProgram(uiModel,
@@ -72,8 +82,14 @@ func Run(ctx context.Context, options Options) (Result, error) {
 }
 
 func RunInit(ctx context.Context, options InitOptions) (config.Config, error) {
-	input := os.Stdin
-	output := os.Stdout
+	input := options.Input
+	if input == nil {
+		input = os.Stdin
+	}
+	output := options.Output
+	if output == nil {
+		output = os.Stdout
+	}
 
 	setupModel := newInitModel(ctx, options)
 	program := tea.NewProgram(setupModel,

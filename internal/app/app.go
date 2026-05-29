@@ -17,17 +17,23 @@ import (
 
 const version = "0.1.0"
 
+type runOptions struct {
+	capture bool
+}
+
 func Run(args []string) error {
-	if len(args) > 0 {
-		switch args[0] {
+	options, remainingArgs := parseRunOptions(args)
+
+	if len(remainingArgs) > 0 {
+		switch remainingArgs[0] {
 		case "__insert-helper":
-			return terminal.RunInsertHelper(args[1:])
+			return terminal.RunInsertHelper(remainingArgs[1:])
 		case "setup":
 			loaded, err := config.Load()
 			if err != nil {
 				return err
 			}
-			return runSetup(loaded)
+			return runSetup(loaded, options)
 		case "version", "--version", "-v":
 			_, err := fmt.Fprintln(os.Stdout, version)
 			return err
@@ -42,17 +48,40 @@ func Run(args []string) error {
 		return err
 	}
 	if err := loaded.Validate(); err != nil {
-		return runSetup(loaded)
+		return runSetup(loaded, options)
 	}
 
-	return runInteractive(loaded)
+	return runInteractive(loaded, options)
 }
 
-func runInteractive(loaded config.Config) error {
+func parseRunOptions(args []string) (runOptions, []string) {
+	options := runOptions{}
+	remainingArgs := make([]string, 0, len(args))
+	for _, arg := range args {
+		switch arg {
+		case "--capture":
+			options.capture = true
+		default:
+			remainingArgs = append(remainingArgs, arg)
+		}
+	}
+	return options, remainingArgs
+}
+
+func runInteractive(loaded config.Config, options runOptions) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
 	defer cancel()
 
 	uiOptions := ui.Options{Config: loaded}
+	if options.capture {
+		tty, err := terminal.OpenTTY()
+		if err != nil {
+			return err
+		}
+		defer tty.Close()
+		uiOptions.Input = tty.In
+		uiOptions.Output = tty.Out
+	}
 
 	activeShell := shell.Detect(loaded.Shell)
 	loaded.Shell = string(activeShell)
@@ -79,6 +108,10 @@ func runInteractive(loaded config.Config) error {
 	}
 
 	if result.Action == ui.ActionAccept && strings.TrimSpace(result.Command) != "" {
+		if options.capture {
+			_, err := fmt.Fprintln(os.Stdout, result.Command)
+			return err
+		}
 		if err := terminal.QueueInput(os.Stdin, result.Command); err != nil {
 			return err
 		}
@@ -87,10 +120,19 @@ func runInteractive(loaded config.Config) error {
 	return err
 }
 
-func runSetup(loaded config.Config) error {
+func runSetup(loaded config.Config, options runOptions) error {
 	activeShell := shell.Detect(loaded.Shell)
 	loaded.Shell = string(activeShell)
 	initOptions := ui.InitOptions{Config: loaded}
+	if options.capture {
+		tty, err := terminal.OpenTTY()
+		if err != nil {
+			return err
+		}
+		defer tty.Close()
+		initOptions.Input = tty.In
+		initOptions.Output = tty.Out
+	}
 
 	configured, err := ui.RunInit(context.Background(), initOptions)
 	cancelled := errors.Is(err, ui.ErrCancelled)
@@ -101,7 +143,7 @@ func runSetup(loaded config.Config) error {
 		return nil
 	}
 
-	return runInteractive(configured)
+	return runInteractive(configured, options)
 }
 
 func printUsage(out *os.File) {
@@ -110,6 +152,8 @@ func printUsage(out *os.File) {
 	_, _ = fmt.Fprintln(out, "Usage:")
 	_, _ = fmt.Fprintln(out, "  ennacmd")
 	_, _ = fmt.Fprintln(out, "    opens setup automatically when config is incomplete, otherwise opens the command UI")
+	_, _ = fmt.Fprintln(out, "  ennacmd --capture")
+	_, _ = fmt.Fprintln(out, "    runs the UI on the controlling terminal and prints the accepted command to stdout")
 	_, _ = fmt.Fprintln(out, "  ennacmd setup")
 	_, _ = fmt.Fprintln(out, "    reruns setup so you can update provider settings")
 	_, _ = fmt.Fprintln(out, "  ennacmd version")
