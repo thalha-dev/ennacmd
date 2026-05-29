@@ -42,10 +42,20 @@ go install github.com/thalha-dev/ennacmd@v0.2.0
 
 ### Build from source
 
+On Windows PowerShell:
+
 ```powershell
 go build ./...
 New-Item -ItemType Directory -Force .\bin | Out-Null
 go build -o .\bin\ennacmd.exe .
+```
+
+On Linux or macOS:
+
+```bash
+go build ./...
+mkdir -p ./bin
+go build -o ./bin/ennacmd .
 ```
 
 ## Quick Start
@@ -90,6 +100,8 @@ The installed wrapper resolves `ennacmd` in this order:
 
 That means `go install` upgrades continue to work cleanly as long as the newer binary is on `PATH`, and local source builds still work even when they are not on `PATH`.
 
+If you installed shell integration from an earlier preview of this feature, run `ennacmd shell-install` once more to replace the older wrapper.
+
 Or print the script if you prefer to source it manually:
 
 ```text
@@ -113,17 +125,45 @@ Integration behavior differs by shell:
 The generated integration is equivalent to:
 
 ```zsh
-function __ennacmd_capture() {
-  local command
-  command="$(ennacmd --capture)"
-  if [[ -n "$command" ]]; then
-    LBUFFER+="$command"
+function ennacmd() {
+  local _ennacmd_binary
+  _ennacmd_binary="$(__ennacmd_resolve_binary)" || {
+    print -u2 -- "ennacmd: binary not found; install ennacmd on PATH or set ENNACMD_BIN"
+    return 127
+  }
+
+  if (( $# > 0 )); then
+    "$_ennacmd_binary" "$@"
+    return $?
   fi
-  zle redisplay
+
+  local _ennacmd_command
+  _ennacmd_command="$("$_ennacmd_binary" --capture)"
+  local _ennacmd_status=$?
+  if (( _ennacmd_status != 0 )); then
+    return $_ennacmd_status
+  fi
+
+  if [[ -n "$_ennacmd_command" ]]; then
+    print -z -- "$_ennacmd_command"
+  fi
 }
 
-zle -N __ennacmd_capture
-bindkey '^G' __ennacmd_capture
+function __ennacmd_resolve_binary() {
+  if [[ -n "${ENNACMD_BIN:-}" && -x "${ENNACMD_BIN}" ]]; then
+    print -r -- "${ENNACMD_BIN}"
+    return 0
+  fi
+
+  local from_path
+  from_path="$(whence -p ennacmd 2>/dev/null)"
+  if [[ -n "$from_path" && -x "$from_path" ]]; then
+    print -r -- "$from_path"
+    return 0
+  fi
+
+  return 1
+}
 ```
 
 After `ennacmd shell-install`, keep using plain `ennacmd`.
@@ -133,16 +173,43 @@ After `ennacmd shell-install`, keep using plain `ennacmd`.
 The generated integration is equivalent to:
 
 ```bash
-__ennacmd_capture() {
+__ennacmd_widget() {
+  local binary
+  binary="$(__ennacmd_resolve_binary)" || {
+    printf '%s\n' 'ennacmd: binary not found; install ennacmd on PATH or set ENNACMD_BIN' >&2
+    return 127
+  }
+
   local command
-  command="$(ennacmd --capture)"
+  command="$("$binary" --capture)"
+  local status=$?
+  if [[ $status -ne 0 ]]; then
+    return $status
+  fi
+
   if [[ -n "$command" ]]; then
     READLINE_LINE="$command"
     READLINE_POINT=${#READLINE_LINE}
   fi
 }
 
-bind -x '"\C-g":__ennacmd_capture'
+__ennacmd_resolve_binary() {
+  if [[ -n "${ENNACMD_BIN:-}" && -x "${ENNACMD_BIN}" ]]; then
+    printf '%s\n' "${ENNACMD_BIN}"
+    return 0
+  fi
+
+  local from_path
+  from_path="$(type -P ennacmd 2>/dev/null)"
+  if [[ -n "$from_path" && -x "$from_path" ]]; then
+    printf '%s\n' "$from_path"
+    return 0
+  fi
+
+  return 1
+}
+
+bind -x '"\C-g":__ennacmd_widget'
 ```
 
 After `ennacmd shell-install`, press `Ctrl+G` to open `ennacmd` and insert the accepted command.
@@ -152,15 +219,37 @@ After `ennacmd shell-install`, press `Ctrl+G` to open `ennacmd` and insert the a
 The generated integration is equivalent to:
 
 ```fish
-function __ennacmd_capture
-    set -l command (ennacmd --capture)
+function __ennacmd_widget
+  set -l binary (__ennacmd_resolve_binary)
+  set -l status $status
+  if test $status -ne 0
+    printf '%s\n' 'ennacmd: binary not found; install ennacmd on PATH or set ENNACMD_BIN' >&2
+    return 127
+  end
+
+  set -l command ($binary --capture)
     if test -n "$command"
-        commandline --insert -- $command
+    commandline --replace -- $command
     end
     commandline -f repaint
 end
 
-bind \cg __ennacmd_capture
+function __ennacmd_resolve_binary
+  if test -n "$ENNACMD_BIN"; and test -x "$ENNACMD_BIN"
+    printf '%s\n' "$ENNACMD_BIN"
+    return 0
+  end
+
+  set -l from_path (type -p ennacmd 2>/dev/null)
+  if test -n "$from_path"; and test -x "$from_path"
+    printf '%s\n' "$from_path"
+    return 0
+  end
+
+  return 1
+end
+
+bind \cg __ennacmd_widget
 ```
 
 After `ennacmd shell-install`, press `Ctrl+G` to open `ennacmd` and insert the accepted command.
