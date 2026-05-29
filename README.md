@@ -22,7 +22,7 @@ Command mode
 - First-run setup flow with live provider validation
 - Command refinement, explanation, copy, and accept flows
 - Prompt insertion on supported terminals when a command is accepted
-- Optional capture mode for bash, zsh, and fish shell integrations
+- Built-in shell integration commands for zsh, bash, fish, and PowerShell
 
 ## Installation
 
@@ -72,13 +72,37 @@ ennacmd setup
 
 ## Shell Integration
 
-Run `ennacmd` normally first. When you accept a command, `ennacmd` tries to insert it back into the active prompt on supported terminals.
+Windows consoles expose a real input queue, so plain `ennacmd` can insert the accepted command directly.
 
-Some Linux terminals or kernels block child-process prompt injection. When that happens, use capture mode instead: `ennacmd --capture` runs the UI on the real terminal and prints the accepted command to stdout so your shell can place it back into the current prompt.
+Unix shells are different: a child process usually cannot rewrite the parent shell's prompt buffer reliably. The supported fix is the built-in shell integration flow, which uses `ennacmd --capture` under the hood and lets the shell place the accepted command back into its own line editor.
+
+Install the integration for your current shell once:
+
+```text
+ennacmd shell-install
+```
+
+Run `shell-install` from the actual `ennacmd` binary you plan to keep using. The generated integration records that binary path, so rerun `shell-install` if you move the binary later.
+
+Or print the script if you prefer to source it manually:
+
+```text
+ennacmd shell-init zsh
+ennacmd shell-init bash
+ennacmd shell-init fish
+ennacmd shell-init powershell
+```
+
+Integration behavior differs by shell:
+
+- `zsh` keeps the plain `ennacmd` command UX by wrapping `ennacmd` itself and pushing the accepted command back into the next prompt.
+- `bash` installs a `Ctrl+G` binding that opens `ennacmd` and inserts the accepted command with Readline.
+- `fish` installs a `Ctrl+G` binding that opens `ennacmd` and inserts the accepted command with `commandline`.
+- `powershell` integration can be printed with `shell-init`, but Windows already supports direct insertion without it.
 
 ### zsh
 
-Add this to `~/.zshrc` and reload your shell:
+The generated integration is equivalent to:
 
 ```zsh
 function __ennacmd_capture() {
@@ -94,11 +118,11 @@ zle -N __ennacmd_capture
 bindkey '^G' __ennacmd_capture
 ```
 
-Press `Ctrl+G` to open `ennacmd`, then press `Enter` in command mode to insert the accepted command back into your prompt.
+After `ennacmd shell-install`, keep using plain `ennacmd`.
 
 ### bash
 
-Add this to `~/.bashrc` and reload your shell:
+The generated integration is equivalent to:
 
 ```bash
 __ennacmd_capture() {
@@ -113,11 +137,11 @@ __ennacmd_capture() {
 bind -x '"\C-g":__ennacmd_capture'
 ```
 
-Press `Ctrl+G` to open `ennacmd`, then press `Enter` in command mode to insert the accepted command back into your prompt.
+After `ennacmd shell-install`, press `Ctrl+G` to open `ennacmd` and insert the accepted command.
 
 ### fish
 
-Add this to `~/.config/fish/config.fish` and reload your shell:
+The generated integration is equivalent to:
 
 ```fish
 function __ennacmd_capture
@@ -131,13 +155,15 @@ end
 bind \cg __ennacmd_capture
 ```
 
-Press `Ctrl+G` to open `ennacmd`, then press `Enter` in command mode to insert the accepted command back into your prompt.
+After `ennacmd shell-install`, press `Ctrl+G` to open `ennacmd` and insert the accepted command.
 
 ## Commands
 
 ```text
 ennacmd
 ennacmd --capture
+ennacmd shell-init [shell]
+ennacmd shell-install [shell]
 ennacmd setup
 ennacmd version
 ```
@@ -187,9 +213,11 @@ Command generation is constrained intentionally:
 - syntax follows the detected shell
 - commands are adapted to the current operating system
 
-When you accept a command, `ennacmd` inserts it into the active prompt instead of executing it automatically when the terminal allows queued input.
+When you accept a command, `ennacmd` inserts it into the active prompt instead of executing it automatically.
 
-On Linux, some terminals or kernels block queued-input injection. When that happens, use the shell integration snippets above with `ennacmd --capture`.
+On Windows, this uses the console input queue directly.
+
+On Unix shells, reliable prompt insertion depends on shell integration. Plain `ennacmd` still attempts direct queued input as a best-effort fallback, but the supported path is `ennacmd shell-install`.
 
 ## Development
 

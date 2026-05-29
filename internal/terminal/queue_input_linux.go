@@ -3,15 +3,10 @@
 package terminal
 
 import (
-	"encoding/base64"
 	"errors"
 	"fmt"
-	"io"
 	"os"
-	"os/exec"
-	"strconv"
 	"strings"
-	"time"
 
 	"golang.org/x/sys/unix"
 )
@@ -22,88 +17,18 @@ func QueueInput(in *os.File, command string) error {
 		return nil
 	}
 
-	if err := injectQueuedCommand(in, linuxTTYPath(in), text); err == nil {
-		return nil
-	}
-
-	executable, err := os.Executable()
-	if err != nil {
-		return fmt.Errorf("resolve executable path: %w", err)
-	}
-
-	ttyPath := linuxTTYPath(in)
-	payload := base64.RawURLEncoding.EncodeToString([]byte(text))
-	ttyPayload := base64.RawURLEncoding.EncodeToString([]byte(ttyPath))
-	cmd := exec.Command(executable, "__insert-helper", strconv.Itoa(os.Getpid()), ttyPayload, payload)
-	cmd.Stdin = nil
-	cmd.Stdout = io.Discard
-	cmd.Stderr = io.Discard
-	if err := cmd.Start(); err != nil {
-		return fmt.Errorf("start deferred insert helper: %w", err)
-	}
-
-	return nil
-}
-
-func RunInsertHelper(args []string) error {
-	if len(args) < 2 {
-		return fmt.Errorf("missing insert payload")
-	}
-
-	parentPID, err := strconv.Atoi(args[0])
-	if err != nil {
-		return fmt.Errorf("parse parent pid: %w", err)
-	}
-
-	ttyPayloadIndex := 1
-	payloadIndex := 2
-	if len(args) == 2 {
-		ttyPayloadIndex = -1
-		payloadIndex = 1
-	}
-
-	ttyPath := ""
-	if ttyPayloadIndex >= 0 {
-		decodedPath, err := base64.RawURLEncoding.DecodeString(args[ttyPayloadIndex])
-		if err != nil {
-			return fmt.Errorf("decode tty payload: %w", err)
+	if err := injectQueuedCommand(in, linuxTTYPath(in), text); err != nil {
+		if errors.Is(err, unix.EPERM) || errors.Is(err, unix.EACCES) || errors.Is(err, unix.EIO) || errors.Is(err, unix.ENOTTY) {
+			return fmt.Errorf("inject queued command into tty: %w (run 'ennacmd shell-install' once to enable supported shell integration)", err)
 		}
-		ttyPath = string(decodedPath)
-	}
-
-	payload, err := base64.RawURLEncoding.DecodeString(args[payloadIndex])
-	if err != nil {
-		return fmt.Errorf("decode insert payload: %w", err)
-	}
-
-	text := string(payload)
-	if strings.TrimSpace(text) == "" {
-		return nil
-	}
-
-	waitForLinuxProcessExit(parentPID, 3*time.Second)
-	time.Sleep(120 * time.Millisecond)
-
-	if err := injectQueuedCommand(nil, ttyPath, text); err != nil {
 		return fmt.Errorf("inject queued command into tty: %w", err)
 	}
 
 	return nil
 }
 
-func waitForLinuxProcessExit(pid int, timeout time.Duration) {
-	deadline := time.Now().Add(timeout)
-	for time.Now().Before(deadline) {
-		err := unix.Kill(pid, 0)
-		if err == nil {
-			time.Sleep(20 * time.Millisecond)
-			continue
-		}
-		if errors.Is(err, unix.ESRCH) {
-			return
-		}
-		return
-	}
+func RunInsertHelper(_ []string) error {
+	return nil
 }
 
 func injectQueuedCommand(in *os.File, ttyPath string, text string) error {
@@ -133,9 +58,6 @@ func injectQueuedCommand(in *os.File, ttyPath string, text string) error {
 
 	if lastErr == nil {
 		return errors.New("no tty available for queued input")
-	}
-	if errors.Is(lastErr, unix.EPERM) || errors.Is(lastErr, unix.EACCES) || errors.Is(lastErr, unix.EIO) || errors.Is(lastErr, unix.ENOTTY) {
-		return fmt.Errorf("%w", lastErr)
 	}
 	return lastErr
 }
