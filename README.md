@@ -21,7 +21,8 @@ Command mode
 - Provider support for OpenAI-compatible APIs, OpenRouter, and Ollama
 - First-run setup flow with live provider validation
 - Command refinement, explanation, copy, and accept flows
-- Windows prompt prefilling when a command is accepted
+- Prompt insertion on supported terminals when a command is accepted
+- Built-in shell integration commands for zsh, bash, fish, and PowerShell
 
 ## Installation
 
@@ -36,7 +37,7 @@ go install github.com/thalha-dev/ennacmd@latest
 To install a specific tagged release:
 
 ```bash
-go install github.com/thalha-dev/ennacmd@v0.1.0
+go install github.com/thalha-dev/ennacmd@v0.2.0
 ```
 
 ### Build from source
@@ -69,10 +70,108 @@ To rerun setup later:
 ennacmd setup
 ```
 
+## Shell Integration
+
+Windows consoles expose a real input queue, so plain `ennacmd` can insert the accepted command directly.
+
+Unix shells are different: a child process usually cannot rewrite the parent shell's prompt buffer reliably. The supported fix is the built-in shell integration flow, which uses `ennacmd --capture` under the hood and lets the shell place the accepted command back into its own line editor.
+
+Install the integration for your current shell once:
+
+```text
+ennacmd shell-install
+```
+
+The installed wrapper resolves `ennacmd` in this order:
+
+- `ENNACMD_BIN`, if you set it explicitly
+- the current `ennacmd` found on `PATH`
+- the binary that ran `shell-install`, as a fallback
+
+That means `go install` upgrades continue to work cleanly as long as the newer binary is on `PATH`, and local source builds still work even when they are not on `PATH`.
+
+Or print the script if you prefer to source it manually:
+
+```text
+ennacmd shell-init zsh
+ennacmd shell-init bash
+ennacmd shell-init fish
+ennacmd shell-init powershell
+```
+
+`shell-init` prints a generic script. It does not bake in any temporary `go run` build path.
+
+Integration behavior differs by shell:
+
+- `zsh` keeps the plain `ennacmd` command UX by wrapping `ennacmd` itself and pushing the accepted command back into the next prompt.
+- `bash` installs a `Ctrl+G` binding that opens `ennacmd` and inserts the accepted command with Readline.
+- `fish` installs a `Ctrl+G` binding that opens `ennacmd` and inserts the accepted command with `commandline`.
+- `powershell` integration can be printed with `shell-init`, but Windows already supports direct insertion without it.
+
+### zsh
+
+The generated integration is equivalent to:
+
+```zsh
+function __ennacmd_capture() {
+  local command
+  command="$(ennacmd --capture)"
+  if [[ -n "$command" ]]; then
+    LBUFFER+="$command"
+  fi
+  zle redisplay
+}
+
+zle -N __ennacmd_capture
+bindkey '^G' __ennacmd_capture
+```
+
+After `ennacmd shell-install`, keep using plain `ennacmd`.
+
+### bash
+
+The generated integration is equivalent to:
+
+```bash
+__ennacmd_capture() {
+  local command
+  command="$(ennacmd --capture)"
+  if [[ -n "$command" ]]; then
+    READLINE_LINE="$command"
+    READLINE_POINT=${#READLINE_LINE}
+  fi
+}
+
+bind -x '"\C-g":__ennacmd_capture'
+```
+
+After `ennacmd shell-install`, press `Ctrl+G` to open `ennacmd` and insert the accepted command.
+
+### fish
+
+The generated integration is equivalent to:
+
+```fish
+function __ennacmd_capture
+    set -l command (ennacmd --capture)
+    if test -n "$command"
+        commandline --insert -- $command
+    end
+    commandline -f repaint
+end
+
+bind \cg __ennacmd_capture
+```
+
+After `ennacmd shell-install`, press `Ctrl+G` to open `ennacmd` and insert the accepted command.
+
 ## Commands
 
 ```text
 ennacmd
+ennacmd --capture
+ennacmd shell-init [shell]
+ennacmd shell-install [shell]
 ennacmd setup
 ennacmd version
 ```
@@ -122,7 +221,11 @@ Command generation is constrained intentionally:
 - syntax follows the detected shell
 - commands are adapted to the current operating system
 
-On Windows PowerShell, accepted commands can be prefixed back into the active prompt instead of being executed automatically.
+When you accept a command, `ennacmd` inserts it into the active prompt instead of executing it automatically.
+
+On Windows, this uses the console input queue directly.
+
+On Unix shells, reliable prompt insertion depends on shell integration. Plain `ennacmd` still attempts direct queued input as a best-effort fallback, but the supported path is `ennacmd shell-install`.
 
 ## Development
 
@@ -154,7 +257,7 @@ go build -o .\bin\ennacmd.exe .
 
 This repository is set up for automatic tagged releases with GitHub Actions and GoReleaser.
 
-Push a semantic version tag like `v0.1.0`, and the workflow will:
+Push a semantic version tag like `v0.2.0`, and the workflow will:
 
 - run tests
 - build release binaries for Windows, Linux, and macOS
