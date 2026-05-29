@@ -37,7 +37,7 @@ go install github.com/thalha-dev/ennacmd@latest
 To install a specific tagged release:
 
 ```bash
-go install github.com/thalha-dev/ennacmd@v0.2.0
+go install github.com/thalha-dev/ennacmd@v0.2.1
 ```
 
 ### Build from source
@@ -100,7 +100,7 @@ The installed wrapper resolves `ennacmd` in this order:
 
 That means `go install` upgrades continue to work cleanly as long as the newer binary is on `PATH`, and local source builds still work even when they are not on `PATH`.
 
-If you installed shell integration from an earlier preview of this feature, run `ennacmd shell-install` once more to replace the older wrapper.
+If you installed shell integration from `v0.2.0` or an earlier preview of this feature, run `ennacmd shell-install` once more to replace the older wrapper.
 
 Or print the script if you prefer to source it manually:
 
@@ -346,7 +346,7 @@ go build -o .\bin\ennacmd.exe .
 
 This repository is set up for automatic tagged releases with GitHub Actions and GoReleaser.
 
-Push a semantic version tag like `v0.2.0`, and the workflow will:
+Push a semantic version tag like `v0.2.1`, and the workflow will:
 
 - run tests
 - build release binaries for Windows, Linux, and macOS

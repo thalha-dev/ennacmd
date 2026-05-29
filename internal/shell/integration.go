@@ -11,6 +11,7 @@ import (
 const (
 	integrationStartMarker = "# >>> ennacmd shell integration >>>"
 	integrationEndMarker   = "# <<< ennacmd shell integration <<<"
+	fallbackToken          = "__ENNACMD_FALLBACK__"
 )
 
 func IntegrationScript(kind Kind) (string, error) {
@@ -23,7 +24,7 @@ func integrationScript(kind Kind, fallbackBinaryPath string) (string, error) {
 
 	switch kind {
 	case Zsh:
-		return fmt.Sprintf(strings.TrimSpace(`function ennacmd() {
+		return applyFallback(strings.TrimSpace(`function ennacmd() {
 	local _ennacmd_binary
 	_ennacmd_binary="$(__ennacmd_resolve_binary)" || {
 		print -u2 -- "ennacmd: binary not found; install ennacmd on PATH or set ENNACMD_BIN"
@@ -59,7 +60,7 @@ function __ennacmd_resolve_binary() {
 		return 0
 	fi
 
-	local fallback=%s
+	local fallback=__ENNACMD_FALLBACK__
 	if [[ -n "$fallback" && -x "$fallback" ]]; then
 		print -r -- "$fallback"
 		return 0
@@ -68,7 +69,7 @@ function __ennacmd_resolve_binary() {
 	return 1
 }`), bashBinary) + "\n", nil
 	case Bash:
-		return fmt.Sprintf(strings.TrimSpace(`__ennacmd_widget() {
+		return applyFallback(strings.TrimSpace(`__ennacmd_widget() {
 	local binary
 	binary="$(__ennacmd_resolve_binary)" || {
 		printf '%s\n' 'ennacmd: binary not found; install ennacmd on PATH or set ENNACMD_BIN' >&2
@@ -100,7 +101,7 @@ __ennacmd_resolve_binary() {
 		return 0
 	fi
 
-	local fallback=%s
+	local fallback=__ENNACMD_FALLBACK__
 	if [[ -n "$fallback" && -x "$fallback" ]]; then
 		printf '%s\n' "$fallback"
 		return 0
@@ -111,7 +112,7 @@ __ennacmd_resolve_binary() {
 
 bind -x '"\C-g":__ennacmd_widget'`), bashBinary) + "\n", nil
 	case Fish:
-		return fmt.Sprintf(strings.TrimSpace(`function __ennacmd_widget
+		return applyFallback(strings.TrimSpace(`function __ennacmd_widget
 	    set -l binary (__ennacmd_resolve_binary)
 	    set -l status $status
 	    if test $status -ne 0
@@ -143,7 +144,7 @@ function __ennacmd_resolve_binary
 	        return 0
 	    end
 
-	    set -l fallback %s
+	    set -l fallback __ENNACMD_FALLBACK__
 	    if test -n "$fallback"; and test -x "$fallback"
 	        printf '%s\n' "$fallback"
 	        return 0
@@ -154,7 +155,7 @@ end
 
 bind \cg __ennacmd_widget`), bashBinary) + "\n", nil
 	case PowerShell:
-		return fmt.Sprintf(strings.TrimSpace(`function ennacmd {
+		return applyFallback(strings.TrimSpace(`function ennacmd {
     param(
         [Parameter(ValueFromRemainingArguments = $true)]
         [string[]] $Arguments
@@ -189,7 +190,7 @@ function Get-EnnacmdBinary {
 		return $command.Source
 	}
 
-	$fallback = %s
+	$fallback = __ENNACMD_FALLBACK__
 	if (-not [string]::IsNullOrWhiteSpace($fallback) -and (Test-Path $fallback -PathType Leaf)) {
 		return $fallback
 	}
@@ -199,6 +200,10 @@ function Get-EnnacmdBinary {
 	default:
 		return "", fmt.Errorf("shell integration is not available for %q", kind)
 	}
+}
+
+func applyFallback(template string, fallback string) string {
+	return strings.ReplaceAll(template, fallbackToken, fallback)
 }
 
 func InstallIntegration(kind Kind) (string, error) {

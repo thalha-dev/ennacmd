@@ -29,6 +29,7 @@ func TestIntegrationScriptUsesCaptureMode(t *testing.T) {
 			contains: []string{
 				"--capture",
 				"bind -x",
+				"printf '%s\\n'",
 				"type -P ennacmd",
 			},
 		},
@@ -38,6 +39,7 @@ func TestIntegrationScriptUsesCaptureMode(t *testing.T) {
 			contains: []string{
 				"--capture",
 				"commandline --replace",
+				"printf '%s\\n'",
 				"type -p ennacmd",
 			},
 		},
@@ -65,6 +67,10 @@ func TestIntegrationScriptUsesCaptureMode(t *testing.T) {
 				if !strings.Contains(script, expected) {
 					t.Fatalf("IntegrationScript(%q) did not contain %q\nscript:\n%s", testCase.kind, expected, script)
 				}
+			}
+
+			if strings.Contains(script, "%!") {
+				t.Fatalf("IntegrationScript(%q) contained fmt formatting corruption\nscript:\n%s", testCase.kind, script)
 			}
 		})
 	}
