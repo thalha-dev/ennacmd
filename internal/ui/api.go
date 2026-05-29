@@ -6,6 +6,7 @@ import (
 	"os"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 
 	"github.com/thalha-dev/ennacmd/internal/ai"
 	"github.com/thalha-dev/ennacmd/internal/config"
@@ -59,6 +60,7 @@ func Run(ctx context.Context, options Options) (Result, error) {
 	if output == nil {
 		output = os.Stdout
 	}
+	configureLipGlossOutput(output)
 
 	uiModel := newModel(ctx, options, currentDir)
 	program := tea.NewProgram(uiModel,
@@ -90,6 +92,7 @@ func RunInit(ctx context.Context, options InitOptions) (config.Config, error) {
 	if output == nil {
 		output = os.Stdout
 	}
+	configureLipGlossOutput(output)
 
 	setupModel := newInitModel(ctx, options)
 	program := tea.NewProgram(setupModel,
@@ -110,4 +113,13 @@ func RunInit(ctx context.Context, options InitOptions) (config.Config, error) {
 	}
 
 	return completed.result(), completed.quitErr
+}
+
+func configureLipGlossOutput(output *os.File) {
+	if output == nil {
+		return
+	}
+	renderer := lipgloss.NewRenderer(output)
+	lipgloss.SetColorProfile(renderer.ColorProfile())
+	lipgloss.SetHasDarkBackground(renderer.HasDarkBackground())
 }

@@ -98,7 +98,7 @@ func runShellInstall(args []string) error {
 		return err
 	}
 
-	_, err = fmt.Fprintf(os.Stdout, "installed %s shell integration at %s\nrerun this command if you move the ennacmd binary\n", kind.DisplayName(), path)
+	_, err = fmt.Fprintf(os.Stdout, "installed %s shell integration at %s\nuse plain 'ennacmd' after reloading your shell; do not run the binary path directly\nrerun this command if you move the ennacmd binary\n", kind.DisplayName(), path)
 	return err
 }
 
